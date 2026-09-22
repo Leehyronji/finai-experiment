@@ -152,7 +152,7 @@ function renderMC(items, { scored = false, prefix = '' } = {}) {
           itemEl.classList.remove('unanswered');
           logEvent('mc', { item: key, value: idx, correct: scored ? (idx === item.ans ? 1 : 0) : null, changed_from: prev ?? null });
         },
-      }, el('span', { class: 'mark' }, String.fromCharCode(9312 + idx)), el('span', {}, label));
+      }, el('span', { class: 'mark' }, (idx + 1) + '.'), el('span', {}, label));
       opts.append(b);
     });
     itemEl.append(opts);
