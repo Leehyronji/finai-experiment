@@ -75,7 +75,7 @@ function clockText() {
 
 function shell({ title, body, tab, back, tabbar = false, bordered = false, flush = false }) {
   frame.innerHTML = '';
-  frame.append(
+  const parts = [
     el('div', { class: 'statusbar' },
       el('span', { text: clockText() }),
       el('div', { class: 'sb-r' }, el('span', { text: '••• ' }), el('span', { text: 'WiFi' }), el('span', { text: '100%' })),
@@ -88,7 +88,8 @@ function shell({ title, body, tab, back, tabbar = false, bordered = false, flush
     ),
     el('div', { class: 'screen' + (flush ? ' flush' : ''), id: 'scr' }, body),
     tabbar ? tabBar(tab) : null,
-  );
+  ];
+  frame.append(...parts.filter(Boolean));
   if (DEV) devBar();
   $('#scr').scrollTop = 0;
 }
