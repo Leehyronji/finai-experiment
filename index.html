@@ -1,46 +1,15 @@
 <!DOCTYPE html>
-<html lang="ko" data-theme="light">
+<html lang="ko">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>금융 의사결정 연구 · 참여자용</title>
-<meta name="description" content="상황 적응형 금융 AI의 설명 및 개입 방식 연구 — 참여자용 실험 화면">
-
-<link rel="preconnect" href="https://api.fontshare.com" crossorigin>
-<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.0.20/400.css">
+<title>금융 의사결정 연구</title>
 <link rel="stylesheet" href="styles.css">
-
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230f4c81' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3Cpath d='M9 12l2 2 4-4'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 10.5 12 4l8 6.5' stroke='%231c50c8' stroke-width='2' fill='none'/%3E%3Cpath d='M6.5 11v8M12 11v8M17.5 11v8M3.5 19.5h17' stroke='%231c50c8' stroke-width='2'/%3E%3C/svg%3E">
 </head>
 <body>
-
-<header class="topbar">
-  <div class="brand">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="연구 로고">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-      <path d="M9 12l2 2 4-4"/>
-    </svg>
-    <span>금융 의사결정 연구</span>
-    <span class="brand-sub">참여자용 화면</span>
-  </div>
-  <div class="topbar-right">
-    <button type="button" class="icon-btn" id="theme-toggle" aria-label="다크 모드로 전환"></button>
-  </div>
-</header>
-<div class="progress-rail"><div class="progress-fill" id="progress-fill"></div></div>
-
-<main id="app"></main>
-
-<noscript>
-  <div style="max-width:640px;margin:4rem auto;padding:0 1.25rem">
-    <h1>자바스크립트가 필요합니다</h1>
-    <p>본 조사는 자바스크립트를 사용합니다. 브라우저 설정에서 자바스크립트를 허용한 뒤 새로고침해 주세요.</p>
-  </div>
-</noscript>
-
+<main id="frame" aria-live="polite"></main>
 <script type="module" src="app.js"></script>
 </body>
 </html>
