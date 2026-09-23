@@ -222,7 +222,7 @@ function consent() {
       el('div', { class: 'doc' },
         el('h3', { text: '참여 안내' }),
         el('ul', {},
-          el('li', { text: '소요 시간은 약 7~9분입니다.' }),
+          el('li', { text: '소요 시간은 약 5~7분입니다.' }),
           el('li', { text: '연구 과정에서 실제 금전이 이동하는 일은 전혀 없습니다. 화면상의 모의 선택만 수행합니다.' }),
           el('li', { text: '모든 계좌번호·연락처·기관명은 실험용 가상 정보입니다.' }),
           el('li', { text: '응답은 익명으로 처리되며 통계 분석 목적으로만 사용됩니다.' }),
@@ -847,23 +847,24 @@ function debrief() {
   });
   body.append(reuse);
 
-  const post = el('div', {},
-    el('div', { class: 'sect-title', text: '마지막 점검 문항' }),
-    el('div', { class: 'q' }, el('div', { class: 'qt', text: '실험 중 제시된 상황이 실제 상황과 비슷하게 느껴졌습니까?' }), scaleRow('PC1', st)),
-    el('div', { class: 'q' }, el('div', { class: 'qt', text: '이 연구의 목적을 응답 전에 짐작하고 있었습니까?' }), scaleRow('PC2', st)),
-  );
-  body.append(post);
 
   const fin = el('button', { class: 'btn primary', text: '응답 제출하고 마치기' });
   fin.disabled = true;
-  fin.addEventListener('click', () => {
+  fin.addEventListener('click', async () => {
     logEv('submit');
-    if (S.redirect) { location.href = S.redirect + (S.redirect.includes('?') ? '&' : '?') + 'code=' + code; return; }
-    finish(code);
+    fin.disabled = true;
+    fin.textContent = '응답을 저장하는 중...';
+    const sent = await sendRecord();
+    setD('upload_ok', sent ? 1 : 0);
+    if (S.redirect) {
+      location.href = S.redirect + (S.redirect.includes('?') ? '&' : '?') + 'code=' + code + '&ok=' + (sent ? 1 : 0);
+      return;
+    }
+    finish(code, sent);
   });
   body.append(el('div', { class: 'sticky-cta' }, fin));
   go('debrief', () => shell({ title: '사후설명', body }));
-  gate(fin, () => st.reconsent != null && st.PC1 != null && st.PC2 != null);
+  gate(fin, () => st.reconsent != null);
 }
 
 function rowsForExport() {
@@ -875,7 +876,7 @@ function rowsForExport() {
   };
 }
 
-function finish(code) {
+function finish(code, sent = null) {
   const rec = rowsForExport();
   const body = el('div', {},
     el('div', { class: 'done-hero' },
@@ -884,13 +885,41 @@ function finish(code) {
       el('p', { text: '아래 완료 코드를 설문 플랫폼에 입력해 주세요.' }),
     ),
     el('div', { class: 'code', text: code }),
-    el('div', { class: 'note', text: '창을 닫으시면 됩니다. 연구에 참여해 주셔서 감사합니다.' }),
+    el('div', { class: 'note', text: sent === false
+      ? '응답 저장이 지연되고 있습니다. 아래 [JSON 저장]을 눌러 파일을 내려받은 뒤 연구자에게 전달해 주시면 됩니다.'
+      : '창을 닫으시면 됩니다. 연구에 참여해 주셔서 감사합니다.' }),
     el('div', { class: 'btnrow', style: 'margin-top:16px' },
       el('button', { class: 'btn ghost', text: 'CSV 저장', onclick: () => dl(toCsv(rec), `resp_S${S.study}_c${S.cond}_${code}.csv`, 'text/csv') }),
       el('button', { class: 'btn ghost', text: 'JSON 저장', onclick: () => dl(JSON.stringify({ ...rec, events: S.events }, null, 2), `resp_S${S.study}_c${S.cond}_${code}.json`, 'application/json') }),
     ),
   );
   go('finish', () => shell({ title: '완료', body }));
+}
+
+/* ---------------- 응답 전송 ----------------
+   ENDPOINT 를 설정하면 참가자가 [응답 제출]을 누를 때 결과가 자동 전송된다.
+   구글 Apps Script 웹앱, Supabase Edge Function, 자체 서버 등 POST 를 받는 주소면 된다.
+   설정하지 않으면(빈 문자열) 전송을 건너뛰고 완료 화면의 내려받기 버튼만 사용한다.
+   ?endpoint= 쿼리로도 덮어쓸 수 있어 파일럿 단계에서 임시 주소를 붙이기 쉽다. */
+const ENDPOINT = P.get('endpoint') || '';
+
+async function sendRecord() {
+  if (!ENDPOINT) return null;
+  const payload = JSON.stringify({ ...rowsForExport(), events: S.events });
+  for (let i = 0; i < 3; i += 1) {
+    try {
+      await fetch(ENDPOINT, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: payload,
+      });
+      return true;
+    } catch (e) {
+      await new Promise((r) => setTimeout(r, 600 * (i + 1)));
+    }
+  }
+  return false;
 }
 
 function toCsv(o) {
