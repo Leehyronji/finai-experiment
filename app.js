@@ -1,15 +1,13 @@
-/* ============================================================
-   상황 적응형 금융 AI 실험 — 모의 은행 앱 런너
-   개인용 · 외부 노출 금지 · 실제 금전 거래 없음
-   Study 1 / Study 2 는 독립 표본. ?study=1 또는 2 로 분기.
-   ============================================================ */
+// 상황 적응형 금융 AI 실험 자극물 (Study 1 / Study 2)
+// 실제 금전 거래는 일어나지 않는다. 화면상의 모의 선택만 기록한다.
+// ?study=1 또는 ?study=2 로 분기하고, 참가자는 한 연구만 수행한다.
 import {
   BANK, PROFILE, PRODUCTS, S1_CONDITIONS, S1_QUIZ, S1_PRIO, SUIT_KEYWORDS,
   S1_LIKERT, S2_CONDITIONS, S2_SCENARIO, S2_ALERTS, S2_ACTIONS, S2_STIGMA, ATTN, ATTN_ANS,
   S2_LIKERT, S2_REACT, CONTROLS, CONTROLS_S2, FIN_SELF,
 } from './data.js';
 
-/* ---------------- 유틸 ---------------- */
+// 유틸
 const $ = (s, r = document) => r.querySelector(s);
 const now = () => Math.round(performance.now());
 const won = (n) => n.toLocaleString('ko-KR');
@@ -32,7 +30,7 @@ function el(tag, attrs = {}, ...kids) {
   return n;
 }
 
-/* ---------------- 상태 ---------------- */
+// 상태
 const pick = (n) => 1 + Math.floor(Math.random() * n);
 const STUDY = (() => {
   const s = parseInt(P.get('study'), 10);
@@ -60,8 +58,7 @@ const S = {
 };
 const DEV = P.get('admin') === '1';
 
-/* 행동 선택지 제시순서: 참가자마다 1회 무작위화하고 세션 내에서는 고정한다.
-   (재렌더 때마다 섞이면 참가자가 혼란을 겪고 순서 효과를 통제할 수 없다) */
+// 행동 선택지 순서는 참가자마다 한 번만 섞고 세션 내에서는 고정한다.
 const ACTION_ORDER = (() => {
   const a = [...S2_ACTIONS];
   for (let i = a.length - 1; i > 0; i -= 1) {
@@ -72,7 +69,7 @@ const ACTION_ORDER = (() => {
 })();
 S.data.action_order = ACTION_ORDER.map((x) => x.id).join('|');
 
-/* 응답 환경 기록 (기록만 하고 기본 분석모형의 공변량으로 자동 투입하지는 않는다) */
+// 응답 환경. 기록만 하고 공변량으로 자동 투입하지 않는다.
 S.data.viewport_w = window.innerWidth;
 S.data.viewport_h = window.innerHeight;
 S.data.dpr = window.devicePixelRatio || 1;
@@ -86,7 +83,7 @@ function logEv(type, payload = {}) {
 }
 function setD(k, v) { S.data[k] = v; }
 
-/* ---------------- 프레임 렌더 ---------------- */
+// 프레임 렌더
 const frame = $('#frame');
 
 function clockText() {
@@ -145,7 +142,7 @@ function devBar() {
   ));
 }
 
-/* 화면 전환 + 체류시간 기록 */
+// 화면 전환 + 체류시간 기록
 let toastT = null;
 function toast(msg) {
   const old = document.querySelector('.toast');
@@ -163,7 +160,7 @@ function go(name, fn) {
   fn();
 }
 
-/* ---------------- 설문 위젯 ---------------- */
+// 설문 위젯
 function likertBlock(block, store) {
   return el('div', {},
     el('div', { class: 'sect-title', text: block.title }),
@@ -205,7 +202,7 @@ function choiceQ(id, q, opts, store, onPick) {
   return el('div', { class: 'q' }, el('div', { class: 'qt', text: q }), box);
 }
 
-/* 필수응답 게이트 */
+// 필수응답 게이트
 let GATE = null;
 function gate(btn, check) { GATE = { btn, check }; refreshGate(); }
 function refreshGate() { if (GATE) GATE.btn.disabled = !GATE.check(); }
@@ -216,16 +213,16 @@ function cta(label, onclick, disabled = true) {
   return el('div', { class: 'sticky-cta' }, b);
 }
 
-/* ---------------- 플로우 ---------------- */
+// 플로우
 const FLOW = S.study === 1
   ? ['consent', 'controls', 's1_intro', 's1_home', 's1_list', 's1_reason', 's1_quiz', 's1_likert', 'debrief']
   : ['consent', 'controls', 's2_stigma', 's2_home', 's2_transfer', 's2_likert', 'debrief'];
 let step = -1;
 function next() { step += 1; const n = FLOW[step]; if (n) SCREENS[n](); }
-/* 화면 이름으로 이동한다. 뒤로가기 후 재진입 시 단계 포인터가 어긋나지 않게 한다. */
+// 화면 이름으로 이동. 뒤로가기 후 재진입에서 단계가 건너뛰지 않게 한다.
 function goTo(name) { const i = FLOW.indexOf(name); if (i >= 0) { step = i; SCREENS[name](); } }
 
-/* ---------- 1. 동의 ---------- */
+// 1. 동의
 function consent() {
   const store = S.data;
   const b = el('button', { class: 'btn primary', text: '동의하고 시작하기', onclick: () => { logEv('consent'); next(); } });
@@ -256,7 +253,7 @@ function consent() {
   }));
 }
 
-/* ---------- 2. 통제변수 ---------- */
+// 2. 통제변수
 function controls() {
   const st = S.data;
   const body = el('div', { class: 'survey' },
@@ -276,8 +273,7 @@ function controls() {
   gate(btn.firstChild, () => need.every((k) => st[k] != null));
 }
 
-/* ================= STUDY 1 ================= */
-
+// STUDY 1
 function s1Intro() {
   go('s1_intro', () => shell({
     title: '안내',
@@ -343,7 +339,7 @@ function s1Home() {
   }));
 }
 
-/* ---- Study 1 상품 화면 ---- */
+// Study 1 상품 화면
 const S1 = { firstTapT: null, changes: 0, pending: null, openedAt: null, viewed: {} };
 
 function s1List() {
@@ -412,7 +408,7 @@ function s1Detail(p) {
   }
 
   if (key === 'list' || key === 'ai') {
-    /* ③·④ 정보 동등: 아래 원자료 블록은 두 조건에서 완전히 동일 */
+    // 아래 원자료 블록은 ③과 ④에서 동일하다.
     body.append(el('div', { class: 'sect-title', text: '금리 정보' }));
     body.append(el('div', { class: 'card' },
       row('기본금리', `연 ${p.base.toFixed(1)}%`),
@@ -628,8 +624,7 @@ function s1Likert() {
   gate(btn.firstChild, () => ids.every((k) => st[k] != null));
 }
 
-/* ================= STUDY 2 ================= */
-
+// STUDY 2
 function s2Stigma() {
   const st = S.data;
   const body = el('div', { class: 'survey' },
@@ -701,7 +696,7 @@ function s2Call() {
   addLine();
 }
 
-/* ---- Study 2 이체 화면 ---- */
+// Study 2 이체 화면
 const S2 = { firstT: null, changes: 0, sel: null, openedAt: null, alertShown: null };
 
 function s2Transfer() {
@@ -846,7 +841,7 @@ function s2Likert() {
   gate(btn.firstChild, () => ids.every((k) => st[k] != null));
 }
 
-/* ---------- 사후설명 ---------- */
+// 사후설명
 function debrief() {
   const st = S.data;
   const code = 'CAFAI-' + Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -866,7 +861,7 @@ function debrief() {
       el('p', { text: '위 설명을 확인한 뒤에도 본인의 응답 자료를 연구에 사용하는 것에 동의하십니까?' }),
     ),
   );
-  /* 사후설명 이해 확인: 최소 표시시간을 강제하는 대신 내용 확인 문항을 둔다. */
+  // 사후설명을 읽었는지 확인. 최소 표시시간을 강제하지 않는다.
   if (S.study === 2) {
     body.append(el('div', { class: 'doc' },
       el('h3', { text: '내용 확인' }),
@@ -948,7 +943,7 @@ function finish(code, sent = null) {
   go('finish', () => shell({ title: '완료', body }));
 }
 
-/* ---------------- 응답 전송 ----------------
+/* 응답 전송
    ENDPOINT 를 설정하면 참가자가 [응답 제출]을 누를 때 결과가 자동 전송된다.
    구글 Apps Script 웹앱, Supabase Edge Function, 자체 서버 등 POST 를 받는 주소면 된다.
    설정하지 않으면(빈 문자열) 전송을 건너뛰고 완료 화면의 내려받기 버튼만 사용한다.
@@ -957,7 +952,7 @@ const ENDPOINT = P.get('endpoint') || '';
 
 async function sendRecord() {
   if (!ENDPOINT) return null;
-  /* 재동의를 거부한 참가자의 응답 본문은 전송하지 않고, 철회 사실만 남긴다. */
+  // 재동의 거부 시 응답 본문은 보내지 않고 철회 사실만 남긴다.
   const withdrawn = S.data.reconsent === 0;
   const payload = withdrawn
     ? JSON.stringify({
@@ -993,7 +988,7 @@ function dl(text, name, mime) {
   document.body.append(a); a.click(); a.remove();
 }
 
-/* ---------------- 등록 ---------------- */
+// 등록
 const SCREENS = {
   consent, controls,
   s1_intro: s1Intro, s1_home: s1Home, s1_list: s1List,
