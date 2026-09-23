@@ -5,7 +5,7 @@
    ============================================================ */
 import {
   BANK, PROFILE, PRODUCTS, S1_CONDITIONS, S1_QUIZ, S1_PRIO, SUIT_KEYWORDS,
-  S1_LIKERT, S2_CONDITIONS, S2_SCENARIO, S2_ALERTS, S2_ACTIONS, S2_STIGMA,
+  S1_LIKERT, S2_CONDITIONS, S2_SCENARIO, S2_ALERTS, S2_ACTIONS, S2_STIGMA, ATTN, ATTN_ANS,
   S2_LIKERT, S2_REACT, CONTROLS, CONTROLS_S2, FIN_SELF,
 } from './data.js';
 
@@ -59,6 +59,27 @@ const S = {
   screenT0: now(),
 };
 const DEV = P.get('admin') === '1';
+
+/* 행동 선택지 제시순서: 참가자마다 1회 무작위화하고 세션 내에서는 고정한다.
+   (재렌더 때마다 섞이면 참가자가 혼란을 겪고 순서 효과를 통제할 수 없다) */
+const ACTION_ORDER = (() => {
+  const a = [...S2_ACTIONS];
+  for (let i = a.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+})();
+S.data.action_order = ACTION_ORDER.map((x) => x.id).join('|');
+
+/* 응답 환경 기록 (기록만 하고 기본 분석모형의 공변량으로 자동 투입하지는 않는다) */
+S.data.viewport_w = window.innerWidth;
+S.data.viewport_h = window.innerHeight;
+S.data.dpr = window.devicePixelRatio || 1;
+S.data.touch = ('ontouchstart' in window || navigator.maxTouchPoints > 0) ? 1 : 0;
+S.data.device_type = (window.innerWidth < 768 && S.data.touch) ? 'mobile'
+  : (S.data.touch ? 'tablet' : 'desktop');
+S.data.ua = (navigator.userAgent || '').slice(0, 180);
 
 function logEv(type, payload = {}) {
   S.events.push({ t: now() - S.t0, type, ...payload });
@@ -147,7 +168,7 @@ function likertBlock(block, store) {
   return el('div', {},
     el('div', { class: 'sect-title', text: block.title }),
     block.items.map(([id, text, rev]) => el('div', { class: 'q' },
-      el('div', { class: 'qt' }, text, rev ? el('span', { class: 'rev', text: '  (역문항)' }) : null),
+      el('div', { class: 'qt' }, text),
       scaleRow(id, store),
     )),
   );
@@ -524,7 +545,7 @@ function s1Done(p) {
 
 function s1Reason() {
   const st = S.data;
-  const ta = el('textarea', { placeholder: '예: 급여이체가 없어서 실제로 받을 수 있는 우대금리를 기준으로 비교했습니다. (최소 20자)' });
+  const ta = el('textarea', { placeholder: '선택한 이유를 구체적으로 적어 주세요. (최소 20자)' });
   const cc = el('div', { class: 'charcount', text: '0자' });
   const body = el('div', { class: 'survey' },
     el('h2', { text: '선택 이유' }),
@@ -559,29 +580,36 @@ function s1Quiz() {
   gate(btn.firstChild, () => S1_QUIZ.every((q) => st[q.id] != null));
 }
 
-/* 의사결정 적합성 0~100점 루브릭 (논문 표 6) */
+/* 정보-기준 정합성 지표 (개정)
+   - 단일 0~100점 합산 점수를 폐기하고 서로 다른 구성개념을 개별 지표로 기록한다.
+   - 이해도(UC3/UC4)는 별도 종속변수이므로 여기서 재사용하지 않는다.
+   - 광고 최고금리 기준(PRIO=2)은 '오답'이 아니라 별도의 편향 지표로 분리 기록한다. */
 function scoreSuitability() {
   const st = S.data;
-  const acc = st.UC3_correct === 1 ? 30 : 0;                 // 적용금리 비교 정확성 30
-  const early = st.UC4_correct === 1 ? 15 : 0;               // 중도해지 조건 이해 15
-  const prio = st[S1_PRIO.id];                               // 0=적용금리 1=유동성 2=광고최고금리 3=직관
+  const prio = st[S1_PRIO.id];   // 0=적용금리 1=유연성 2=광고최고금리 3=직관
   const ch = st.s1_choice;
-  let coh = 0;                                               // 선택-기준 정합성 30
-  if (prio === 0) coh = ch === 'A' ? 30 : 15;
-  else if (prio === 1) coh = ch === 'B' ? 30 : 15;
-  else coh = 0;
+
+  // (1) 주지표: 진술한 기준과 실제 선택의 정합성 (1=정합, 0=불일치, null=기준 없음)
+  let coh = null;
+  if (prio === 0) coh = ch === 'A' ? 1 : 0;        // 적용금리 4.5 > 4.2 → A
+  else if (prio === 1) coh = ch === 'B' ? 1 : 0;   // 부분출금 가능·해지조건 완화 → B
+  else if (prio === 2) coh = ch === 'A' ? 1 : 0;   // 광고 최고금리 7.0 > 5.0 → A
+  // prio === 3 (직관) → 기준이 없으므로 정합성 정의 불가 = null
+
+  // (2) 보조지표: 자기조건 대조 근거 언급 수 (탐색적. 자동 키워드 계수이므로 수동 코딩 병행)
   const txt = (st.OR1 || '');
   const hits = SUIT_KEYWORDS.filter((k) => txt.includes(k)).length;
-  const grounded = Math.min(hits, 3) / 3 * 15;               // 근거의 자기조건 대조 15
-  const both = st.s1_viewed_both === 1 ? 10 : 0;             // 두 상품 모두 확인 10
-  setD('SUIT_rate_accuracy', acc);
-  setD('SUIT_early_terms', early);
+
+  // (3) 행동지표: 두 상품을 모두 열어보았는지
+  const both = st.s1_viewed_both === 1 ? 1 : 0;
+
   setD('SUIT_coherence', coh);
-  setD('SUIT_grounded', Math.round(grounded));
+  setD('SUIT_coherence_defined', prio === 3 ? 0 : 1);
+  setD('SUIT_grounded_hits', hits);
+  setD('SUIT_grounded_len', txt.replace(/\s/g, '').length);
   setD('SUIT_compared', both);
-  setD('SUIT_total_100', Math.round(acc + early + coh + grounded + both));
-  setD('SUIT_keyword_hits', hits);
   setD('BIAS_headline_rate', prio === 2 ? 1 : 0);
+  setD('CHOICE_applied_rate_optimal', ch === 'A' ? 1 : 0);  // 규범적 해석은 분석단계에서
 }
 
 function s1Likert() {
@@ -591,9 +619,10 @@ function s1Likert() {
     el('p', { class: 'lead', text: '방금 확인한 상품 화면을 떠올리며 응답해 주세요. 정답은 없습니다.' }),
     el('div', { class: 'progress' }, el('i', { style: 'width:80%' })),
   );
-  S1_LIKERT.forEach((b) => body.append(likertBlock(b, st)));
-  const ids = S1_LIKERT.flatMap((b) => b.items.map((i) => i[0]));
-  const btn = cta('다음', () => next());
+  const s1blocks = [...S1_LIKERT, { title: '응답 확인', items: [ATTN] }];
+  s1blocks.forEach((b) => body.append(likertBlock(b, st)));
+  const ids = s1blocks.flatMap((b) => b.items.map((i) => i[0]));
+  const btn = cta('다음', () => { setD('ATT_pass', st[ATTN[0]] === ATTN_ANS ? 1 : 0); next(); });
   body.append(btn);
   go('s1_likert', () => shell({ title: '설문', body }));
   gate(btn.firstChild, () => ids.every((k) => st[k] != null));
@@ -722,6 +751,14 @@ function s2Alert() {
   const scrim = el('div', { class: 'scrim' });
   const sheet = el('div', { class: 'sheet' }, el('div', { class: 'grab' }));
 
+  const detail = el('div', {},
+    el('div', { style: 'font-size:17px;font-weight:800', text: '이체 내용 확인' }),
+    el('div', { class: 'card', style: 'margin-top:12px' },
+      row('받는 분', S2_SCENARIO.payee),
+      row('입금 계좌', S2_SCENARIO.payeeAcct),
+      row('보낼 금액', won(S.data.s2_amount_entered || 0) + '원'),
+    ));
+
   if (a) {
     const wrap = el('div', { class: `alert-wrap tone-${a.tone}` },
       el('div', { class: 'alert-head' },
@@ -731,22 +768,16 @@ function s2Alert() {
       el('div', { class: 'alert-title', text: a.title }),
       a.bullets.length ? el('ul', { class: 'alert-list' }, a.bullets.map((b) => el('li', { text: b }))) : null,
       a.extra ? el('div', { class: 'alert-extra', text: a.extra }) : null,
-      S.cond >= 4 ? el('div', { class: 'alert-contact', text: '금융 관련 상담·신고: 금융감독원 1332 / 경찰 신고: 112' }) : null,
     );
-    sheet.append(wrap);
+    sheet.append(wrap, el('div', { style: 'height:14px' }), detail);
   } else {
-    sheet.append(el('div', { style: 'font-size:17px;font-weight:800', text: '이체 내용 확인' }),
-      el('div', { class: 'card', style: 'margin-top:12px' },
-        row('받는 분', S2_SCENARIO.payee),
-        row('입금 계좌', S2_SCENARIO.payeeAcct),
-        row('보낼 금액', won(S.data.s2_amount_entered || 0) + '원'),
-      ));
+    sheet.append(detail);
   }
 
   const actions = el('div', { class: 'actions' });
   const confirm = el('button', { class: 'btn primary', text: '선택 확정' });
   confirm.disabled = true;
-  S2_ACTIONS.forEach((act) => {
+  ACTION_ORDER.forEach((act) => {
     const b = el('button', {
       class: 'abtn',
       onclick: () => {
@@ -806,9 +837,10 @@ function s2Likert() {
   );
   const blocks = [...S2_LIKERT];
   if (S.cond >= 4) blocks.push({ title: '안내 방식에 대한 느낌', items: S2_REACT });
+  blocks.push({ title: '응답 확인', items: [ATTN] });
   blocks.forEach((b) => body.append(likertBlock(b, st)));
   const ids = blocks.flatMap((b) => b.items.map((i) => i[0]));
-  const btn = cta('다음', () => next());
+  const btn = cta('다음', () => { setD('ATT_pass', st[ATTN[0]] === ATTN_ANS ? 1 : 0); next(); });
   body.append(btn);
   go('s2_likert', () => shell({ title: '설문', body }));
   gate(btn.firstChild, () => ids.every((k) => st[k] != null));
@@ -834,6 +866,26 @@ function debrief() {
       el('p', { text: '위 설명을 확인한 뒤에도 본인의 응답 자료를 연구에 사용하는 것에 동의하십니까?' }),
     ),
   );
+  /* 사후설명 이해 확인: 최소 표시시간을 강제하는 대신 내용 확인 문항을 둔다. */
+  if (S.study === 2) {
+    body.append(el('div', { class: 'doc' },
+      el('h3', { text: '내용 확인' }),
+      el('p', { text: '위 설명에 따르면, 방금 화면에서 경험한 상황은 무엇이었습니까?' })));
+    const dbq = el('div', { class: 'choices' });
+    ['실제 금융사기 피해 상황이었다', '연구를 위해 만든 가상의 시나리오였다', '잘 모르겠다'].forEach((t, i) => {
+      dbq.append(el('button', {
+        onclick: (e) => {
+          [...dbq.children].forEach((b) => b.classList.remove('sel'));
+          e.currentTarget.classList.add('sel');
+          setD('debrief_check', i);
+          setD('debrief_check_pass', i === 1 ? 1 : 0);
+          refreshGate();
+        },
+      }, t));
+    });
+    body.append(dbq);
+  }
+
   const reuse = el('div', { class: 'choices' });
   ['동의합니다 (자료 사용)', '동의하지 않습니다 (자료 제외 요청)'].forEach((t, i) => {
     reuse.append(el('button', {
@@ -864,7 +916,7 @@ function debrief() {
   });
   body.append(el('div', { class: 'sticky-cta' }, fin));
   go('debrief', () => shell({ title: '사후설명', body }));
-  gate(fin, () => st.reconsent != null);
+  gate(fin, () => st.reconsent != null && (S.study !== 2 || st.debrief_check != null));
 }
 
 function rowsForExport() {
@@ -905,7 +957,16 @@ const ENDPOINT = P.get('endpoint') || '';
 
 async function sendRecord() {
   if (!ENDPOINT) return null;
-  const payload = JSON.stringify({ ...rowsForExport(), events: S.events });
+  /* 재동의를 거부한 참가자의 응답 본문은 전송하지 않고, 철회 사실만 남긴다. */
+  const withdrawn = S.data.reconsent === 0;
+  const payload = withdrawn
+    ? JSON.stringify({
+      participant_id: S.pid, prolific_study_id: S.studyId, prolific_session_id: S.sessionId,
+      study: S.study, condition: S.cond, started_at: S.startedAt,
+      finishedAt: S.data.finishedAt, completion_code: S.data.completion_code,
+      reconsent: 0, withdrawn: true,
+    })
+    : JSON.stringify({ ...rowsForExport(), events: S.events });
   for (let i = 0; i < 3; i += 1) {
     try {
       await fetch(ENDPOINT, {
