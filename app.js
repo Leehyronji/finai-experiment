@@ -6,7 +6,7 @@
 import {
   BANK, PROFILE, PRODUCTS, S1_CONDITIONS, S1_QUIZ, S1_PRIO, SUIT_KEYWORDS,
   S1_LIKERT, S2_CONDITIONS, S2_SCENARIO, S2_ALERTS, S2_ACTIONS, S2_STIGMA,
-  S2_LIKERT, S2_REACT, CONTROLS, FIN_KNOW, FIN_SELF,
+  S2_LIKERT, S2_REACT, CONTROLS, CONTROLS_S2, FIN_SELF,
 } from './data.js';
 
 /* ---------------- 유틸 ---------------- */
@@ -125,6 +125,16 @@ function devBar() {
 }
 
 /* 화면 전환 + 체류시간 기록 */
+let toastT = null;
+function toast(msg) {
+  const old = document.querySelector('.toast');
+  if (old) old.remove();
+  const t = el('div', { class: 'toast', text: msg });
+  frame.append(t);
+  clearTimeout(toastT);
+  toastT = setTimeout(() => t.remove(), 1900);
+}
+
 function go(name, fn) {
   if (S.screen) setD('dwell_' + S.screen + '_ms', (S.data['dwell_' + S.screen + '_ms'] || 0) + (now() - S.screenT0));
   S.screen = name; S.screenT0 = now();
@@ -191,6 +201,8 @@ const FLOW = S.study === 1
   : ['consent', 'controls', 's2_stigma', 's2_home', 's2_transfer', 's2_likert', 'debrief'];
 let step = -1;
 function next() { step += 1; const n = FLOW[step]; if (n) SCREENS[n](); }
+/* 화면 이름으로 이동한다. 뒤로가기 후 재진입 시 단계 포인터가 어긋나지 않게 한다. */
+function goTo(name) { const i = FLOW.indexOf(name); if (i >= 0) { step = i; SCREENS[name](); } }
 
 /* ---------- 1. 동의 ---------- */
 function consent() {
@@ -231,18 +243,13 @@ function controls() {
     el('p', { class: 'lead', text: '통계 분석을 위한 기본 문항입니다. 정답이 없는 문항이니 편하게 응답해 주세요.' }),
     el('div', { class: 'progress' }, el('i', { style: 'width:15%' })),
   );
-  CONTROLS.forEach((c) => body.append(choiceQ(c.id, c.q, c.opts, st)));
-  body.append(el('div', { class: 'sect-title', text: '금융 이해 문항' }));
-  FIN_KNOW.forEach((c) => body.append(choiceQ(c.id, c.q, c.opts, st)));
+  const list = S.study === 2 ? [...CONTROLS, ...CONTROLS_S2] : [...CONTROLS];
+  list.forEach((c) => body.append(choiceQ(c.id, c.q, c.opts, st)));
   body.append(el('div', { class: 'q' },
     el('div', { class: 'qt', text: FIN_SELF[1] }), scaleRow(FIN_SELF[0], st)));
 
-  const need = [...CONTROLS.map((c) => c.id), ...FIN_KNOW.map((c) => c.id), FIN_SELF[0]];
-  const btn = cta('다음', () => {
-    FIN_KNOW.forEach((c) => setD(c.id + '_correct', st[c.id] === c.ans ? 1 : 0));
-    setD('FK_score', FIN_KNOW.reduce((a, c) => a + (st[c.id] === c.ans ? 1 : 0), 0));
-    next();
-  });
+  const need = [...list.map((c) => c.id), FIN_SELF[0]];
+  const btn = cta('다음', () => next());
   body.append(btn);
   go('controls', () => shell({ title: '기본 정보', body }));
   gate(btn.firstChild, () => need.every((k) => st[k] != null));
@@ -287,9 +294,15 @@ function bankHome(onDeposit) {
     el('div', { class: 'quick' },
       [['예금·적금', '◈'], ['대출', '₩'], ['카드', '▣'], ['전체', '⋯']].map(([n, g]) =>
         el('button', {
-          onclick: () => { logEv('quick_tap', { menu: n }); if (n === '예금·적금' && onDeposit) onDeposit(); },
+          class: (onDeposit && n === '예금·적금') ? 'lead-tap' : (onDeposit ? 'dimmed' : ''),
+          onclick: () => {
+            logEv('quick_tap', { menu: n });
+            if (n === '예금·적금') { if (onDeposit) onDeposit(); }
+            else if (onDeposit) toast('이번 과제에서는 [예금·적금] 메뉴만 이용합니다.');
+          },
         }, el('span', { class: 'glyph', text: g }), el('span', { text: n }))),
     ),
+    onDeposit ? el('div', { class: 'guide' }, el('b', { text: '[예금·적금]' }), '을 눌러 적금 상품을 확인하세요.') : null,
     el('div', { class: 'sect-title', text: '최근 거래' }),
     el('div', { class: 'card' },
       BANK.history.map((h) => el('div', { class: 'txn' },
@@ -305,7 +318,7 @@ function bankHome(onDeposit) {
 function s1Home() {
   go('s1_home', () => shell({
     title: '홈', tab: '홈', tabbar: true,
-    body: bankHome(() => next()),
+    body: bankHome(() => goTo('s1_list')),
   }));
 }
 
@@ -349,7 +362,7 @@ function s1List() {
   });
   body.append(el('div', { class: 'note', text: '상품을 눌러 상세 내용을 확인하고, 가입할 상품을 선택해 주세요.' }));
 
-  go('s1_list', () => shell({ title: '예금·적금', tab: '상품', tabbar: true, bordered: true, body, back: () => s1Home() }));
+  go('s1_list', () => shell({ title: '예금·적금', tab: '상품', tabbar: true, bordered: true, body, back: () => goTo('s1_home') }));
 }
 
 function s1Detail(p) {
@@ -504,7 +517,7 @@ function s1Done(p) {
         el('p', { text: `${p.name} · ${p.term}` }),
       ),
       el('div', { class: 'note', text: '모의 화면이며 실제 가입은 이루어지지 않았습니다. 이어서 몇 가지 문항에 응답해 주세요.' }),
-      cta('다음', () => next(), false),
+      cta('다음', () => goTo('s1_reason'), false),
     ),
   }));
 }

@@ -426,3 +426,28 @@ textarea:focus { outline: 2px solid var(--brand); outline-offset: -1px; border-c
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* ---- 메뉴 유도 ---- */
+.quick button.lead-tap { position: relative; border-color: var(--blue); }
+.quick button.lead-tap .glyph { background: var(--blue); color: #fff; }
+.quick button.lead-tap::after {
+  content: ''; position: absolute; inset: -3px; border-radius: 14px;
+  border: 2px solid var(--blue); opacity: .55; animation: leadpulse 1.8s ease-out infinite;
+}
+@keyframes leadpulse { 0% { transform: scale(.96); opacity: .6 } 70% { transform: scale(1.05); opacity: 0 } 100% { opacity: 0 } }
+.quick button.dimmed { opacity: .5; }
+.guide {
+  margin: 10px 16px 0; padding: 9px 12px; border-radius: 10px;
+  background: #EEF3FF; color: #1B3C8C; font-size: 12.5px; line-height: 1.45;
+}
+.guide b { color: var(--blue); }
+.toast {
+  position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%);
+  max-width: 82%; padding: 10px 14px; border-radius: 10px;
+  background: rgba(20,22,28,.92); color: #fff; font-size: 12.5px; line-height: 1.45;
+  text-align: center; z-index: 60; animation: toastin .18s ease-out;
+}
+@keyframes toastin { from { opacity: 0; transform: translate(-50%, 6px) } to { opacity: 1; transform: translate(-50%, 0) } }
+@media (prefers-reduced-motion: reduce) {
+  .quick button.lead-tap::after { animation: none; }
+}
