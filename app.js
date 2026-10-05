@@ -948,7 +948,7 @@ function finish(code, sent = null) {
    구글 Apps Script 웹앱, Supabase Edge Function, 자체 서버 등 POST 를 받는 주소면 된다.
    설정하지 않으면(빈 문자열) 전송을 건너뛰고 완료 화면의 내려받기 버튼만 사용한다.
    ?endpoint= 쿼리로도 덮어쓸 수 있어 파일럿 단계에서 임시 주소를 붙이기 쉽다. */
-const ENDPOINT = P.get('endpoint') || '';
+const ENDPOINT = P.get('endpoint') || 'https://script.google.com/macros/s/AKfycbxbjd7oc71JSY_HOa5a09Zr47PVzXsftHiK9Pl__CLStJo-Kvh0k_LdRqbYn8FkD6tf4A/exec';
 
 async function sendRecord() {
   if (!ENDPOINT) return null;
